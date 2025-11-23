@@ -1,0 +1,6 @@
+id,region,time_of_day,day_type,weather,event_type,expected_call_volume
+1,west,morning,weekday,clear,none,0.4
+2,central,evening,weekday,rain,concert,0.9
+3,east,night,weekend,snow,none,0.8
+4,central,afternoon,weekday,clear,sports_event,0.7
+5,west,night,weekend,rain,none,0.6

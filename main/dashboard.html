@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Emergency Fleet Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, Oxygen;
+      background: #0f172a;
+      color: #f9fafb;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    header {
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #020617;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+
+    header h1 {
+      font-size: 20px;
+      margin: 0;
+    }
+
+    header span {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .tag {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.5);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    #map {
+      flex: 2;
+      min-width: 0;
+    }
+
+    .sidebar {
+      flex: 1;
+      min-width: 280px;
+      max-width: 380px;
+      background: #020617;
+      border-left: 1px solid #111827;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-section {
+      padding: 12px 14px;
+      border-bottom: 1px solid #111827;
+    }
+
+    .sidebar-section h2 {
+      font-size: 14px;
+      margin: 0 0 4px 0;
+    }
+
+    .sidebar-section span {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    .table-container {
+      flex: 1;
+      overflow: auto;
+      padding: 8px 12px 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      background: #020617;
+      z-index: 1;
+    }
+
+    th,
+    td {
+      padding: 6px 4px;
+      text-align: left;
+      border-bottom: 1px solid #111827;
+    }
+
+    th {
+      font-weight: 600;
+      color: #9ca3af;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    tr:nth-child(even) td {
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    .status-pill {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .status-available {
+      background: rgba(34, 197, 94, 0.15);
+      color: #bbf7d0;
+      border: 1px solid rgba(34, 197, 94, 0.6);
+    }
+
+    .status-busy {
+      background: rgba(248, 113, 113, 0.12);
+      color: #fecaca;
+      border: 1px solid rgba(248, 113, 113, 0.65);
+    }
+
+    .badge {
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      color: #e5e7eb;
+    }
+
+    .badge-ambulance {
+      border-color: #38bdf8;
+      color: #bae6fd;
+    }
+
+    .badge-police {
+      border-color: #a855f7;
+      color: #e9d5ff;
+    }
+
+    .badge-fire {
+      border-color: #fb7185;
+      color: #fecaca;
+    }
+
+    .footer-note {
+      font-size: 10px;
+      padding: 4px 14px 10px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div>
+      <h1>Emergency Fleet Dashboard</h1>
+      <span>Control room view • Hamilton → Oshawa corridor</span>
+    </div>
+    <div class="tag">Live sync with SOS app</div>
+  </header>
+
+  <main>
+    <div id="map"></div>
+
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <h2>Fleet overview</h2>
+        <span id="fleetSummary">Loading vehicles...</span>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Lat</th>
+              <th>Lon</th>
+            </tr>
+          </thead>
+          <tbody id="vehicleTableBody">
+            <!-- Rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="footer-note">
+        Click markers on the map to view unit details. Table updates every 5 seconds.
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const BACKEND_BASE = "http://localhost:5000";
+
+    let map;
+    let markers = {}; // id -> marker
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 43.6, lng: -79.5 }, // rough center between Hamilton & Oshawa
+        zoom: 9,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+
+      fetchAndRenderVehicles();
+      setInterval(fetchAndRenderVehicles, 5000);
+    }
+
+    function getMarkerIconColor(type, status) {
+      // Basic color coding by type + status
+      if (status === "busy") {
+        return "https://maps.google.com/mapfiles/ms/icons/red-dot.png";
+      }
+      if (type === "ambulance") {
+        return "https://maps.google.com/mapfiles/ms/icons/ltblue-dot.png";
+      } else if (type === "police") {
+        return "https://maps.google.com/mapfiles/ms/icons/purple-dot.png";
+      } else {
+        return "https://maps.google.com/mapfiles/ms/icons/orange-dot.png";
+      }
+    }
+
+    function fetchAndRenderVehicles() {
+      fetch(`${BACKEND_BASE}/api/vehicles`)
+        .then((res) => res.json())
+        .then((vehicles) => {
+          renderTable(vehicles);
+          renderMarkers(vehicles);
+        })
+        .catch((err) => {
+          console.error("Error fetching vehicles:", err);
+        });
+    }
+
+    function renderTable(vehicles) {
+      const tbody = document.getElementById("vehicleTableBody");
+      tbody.innerHTML = "";
+
+      let availableCount = 0;
+      let busyCount = 0;
+
+      vehicles.forEach((v) => {
+        if (v.status === "available") availableCount++;
+        if (v.status === "busy") busyCount++;
+
+        const tr = document.createElement("tr");
+
+        const tdId = document.createElement("td");
+        tdId.textContent = v.id;
+
+        const tdType = document.createElement("td");
+        const typeSpan = document.createElement("span");
+        typeSpan.classList.add("badge");
+        if (v.type === "ambulance") {
+          typeSpan.classList.add("badge-ambulance");
+          typeSpan.textContent = "AMB";
+        } else if (v.type === "police") {
+          typeSpan.classList.add("badge-police");
+          typeSpan.textContent = "POL";
+        } else {
+          typeSpan.classList.add("badge-fire");
+          typeSpan.textContent = "FIRE";
+        }
+        tdType.appendChild(typeSpan);
+
+        const tdStatus = document.createElement("td");
+        const statusSpan = document.createElement("span");
+        statusSpan.classList.add("status-pill");
+        if (v.status === "available") {
+          statusSpan.classList.add("status-available");
+          statusSpan.textContent = "Available";
+        } else {
+          statusSpan.classList.add("status-busy");
+          statusSpan.textContent = "Busy";
+        }
+        tdStatus.appendChild(statusSpan);
+
+        const tdLat = document.createElement("td");
+        tdLat.textContent = v.lat.toFixed(3);
+
+        const tdLon = document.createElement("td");
+        tdLon.textContent = v.lon.toFixed(3);
+
+        tr.appendChild(tdId);
+        tr.appendChild(tdType);
+        tr.appendChild(tdStatus);
+        tr.appendChild(tdLat);
+        tr.appendChild(tdLon);
+
+        tbody.appendChild(tr);
+      });
+
+      const fleetSummary = document.getElementById("fleetSummary");
+      fleetSummary.textContent =
+        `Total units: ${vehicles.length} • ` +
+        `Available: ${availableCount} • Busy: ${busyCount}`;
+    }
+
+    function renderMarkers(vehicles) {
+      const existingIds = new Set(Object.keys(markers));
+
+      vehicles.forEach((v) => {
+        const pos = { lat: v.lat, lng: v.lon };
+        const iconUrl = getMarkerIconColor(v.type, v.status);
+
+        if (markers[v.id]) {
+          // update existing marker
+          markers[v.id].setPosition(pos);
+          markers[v.id].setIcon(iconUrl);
+        } else {
+          // create new marker
+          const m = new google.maps.Marker({
+            map,
+            position: pos,
+            title: v.id,
+            icon: iconUrl,
+          });
+
+          const info = new google.maps.InfoWindow({
+            content:
+              `<div style="font-size:12px;">
+                <strong>${v.id}</strong><br/>
+                Type: ${v.type}<br/>
+                Status: ${v.status}<br/>
+                Lat: ${v.lat.toFixed(4)}, Lon: ${v.lon.toFixed(4)}
+              </div>`,
+          });
+
+          m.addListener("click", () => {
+            info.open(map, m);
+          });
+
+          markers[v.id] = m;
+        }
+
+        existingIds.delete(v.id);
+      });
+
+      // Remove markers for vehicles that no longer exist (if any)
+      existingIds.forEach((id) => {
+        markers[id].setMap(null);
+        delete markers[id];
+      });
+    }
+  </script>
+
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_API_KEY }}&callback=initMap" async defer></script>
+</body>
+
+</html>

@@ -1,0 +1,10 @@
+id,name,lat,lon,region,capacity_ambulance,capacity_police,capacity_fire
+STN1,Hamilton Central Station,43.255,-79.871,west,8,6,4
+STN2,Burlington North Station,43.340,-79.800,west,6,4,3
+STN3,Oakville South Station,43.450,-79.700,west,6,4,3
+STN4,Mississauga Central Station,43.600,-79.640,central,10,8,6
+STN5,Toronto West Station,43.640,-79.560,central,10,8,6
+STN6,Toronto East Station,43.690,-79.320,central,8,8,5
+STN7,Scarborough Station,43.730,-79.260,east,6,6,4
+STN8,Pickering/Ajax Station,43.850,-79.030,east,4,4,3
+STN9,Oshawa Central Station,43.900,-78.860,east,6,4,3

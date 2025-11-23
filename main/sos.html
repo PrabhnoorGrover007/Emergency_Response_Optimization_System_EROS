@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emergency Request</title>
+
+  <style>
+    /* ==== PAGE BACKGROUND ==== */
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111827;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen;
+      overflow: hidden;
+    }
+
+    /* Scene for 3D perspective */
+    .scene {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      perspective: 1100px;
+      /* depth for 3D look */
+    }
+
+    /* ==== IPHONE SHELL ==== */
+    .phone-shell {
+      width: 430px;
+      /* a bit bigger -> feels thicker */
+      height: 860px;
+      border-radius: 64px;
+      background: #050816;
+      padding: 18px;
+      box-shadow:
+        0 28px 80px rgba(0, 0, 0, 0.95),
+        0 0 0 6px rgba(15, 23, 42, 0.9);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      transform-style: preserve-3d;
+      transform-origin: center;
+      transform: rotateY(0deg) scaleX(1);
+      /* start facing front (home screen) */
+      transition: transform 0.8s ease-out;
+    }
+
+    /* metallic edge for thickness */
+    .phone-shell::before {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      border-radius: 54px;
+      border: 4px solid #6b7280;
+      box-shadow:
+        inset 0 0 0 2px #020617,
+        14px 0 24px rgba(0, 0, 0, 0.85);
+      pointer-events: none;
+    }
+
+    /* rotate to side (not full paper-thin 90°, but thick-looking) */
+    body.intro-side .phone-shell {
+      transform: rotateY(-70deg) translateX(-35px) scaleX(1.25);
+    }
+
+    /* rotate back to front */
+    body.intro-front .phone-shell {
+      transform: rotateY(0deg) translateX(0) scaleX(1);
+    }
+
+    .phone-frame {
+      width: 100%;
+      height: 100%;
+      border-radius: 50px;
+      background: linear-gradient(135deg, #1f2933, #020617);
+      padding: 10px;
+      position: relative;
+      box-sizing: border-box;
+    }
+
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      border-radius: 40px;
+      background: #000;
+      /* base, individual screens on top */
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Dynamic Island / notch */
+    .notch {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 130px;
+      height: 34px;
+      background: #020617;
+      border-radius: 999px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+      z-index: 50;
+    }
+
+    /* SOS strip under the notch */
+    .sos-strip {
+      position: absolute;
+      top: 58px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #b91c1c;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+      z-index: 40;
+    }
+
+    /* Show SOS line only when app is active (after intro) */
+    body.app-active .sos-strip {
+      opacity: 1;
+    }
+
+    /* Side power button (for intro animation) */
+    .side-button {
+      position: absolute;
+      right: -12px;
+      /* sticks out a bit more = thicker look */
+      top: 35%;
+      /* higher like on real iPhone */
+      transform: translateY(-50%);
+      width: 8px;
+      height: 86px;
+      border-radius: 4px;
+      background: #9ca3af;
+      box-shadow:
+        2px 0 5px rgba(0, 0, 0, 0.9),
+        -2px 0 4px rgba(0, 0, 0, 0.45);
+      z-index: 60;
+      transform-origin: right center;
+    }
+
+    /* Triple-click animation when intro-button class is on body */
+    body.intro-button .side-button {
+      animation: powerClicks 1.2s ease-out forwards;
+    }
+
+    @keyframes powerClicks {
+      0% {
+        transform: translateY(-50%) translateX(0px);
+      }
+
+      15% {
+        transform: translateY(-50%) translateX(4px);
+      }
+
+      30% {
+        transform: translateY(-50%) translateX(0px);
+      }
+
+      45% {
+        transform: translateY(-50%) translateX(4px);
+      }
+
+      60% {
+        transform: translateY(-50%) translateX(0px);
+      }
+
+      75% {
+        transform: translateY(-50%) translateX(4px);
+      }
+
+      90% {
+        transform: translateY(-50%) translateX(0px);
+      }
+
+      100% {
+        transform: translateY(-50%) translateX(0px);
+      }
+    }
+
+    /* During intro, dim actual app screens */
+    body.pre-intro #service-screen,
+    body.pre-intro #map-screen {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.app-active #service-screen,
+    body.app-active #map-screen {
+      opacity: 1;
+      pointer-events: auto;
+      transition: opacity 0.3s ease-out;
+    }
+
+    /* ==== HOME SCREEN (FAKE LOCK / HOME) ==== */
+    #home-screen {
+      position: absolute;
+      inset: 0;
+      padding: 40px 20px 20px;
+      background: radial-gradient(circle at top, #1f2937, #020617);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      color: #e5e7eb;
+      text-align: center;
+      z-index: 10;
+    }
+
+    #home-time {
+      font-size: 52px;
+      font-weight: 600;
+      margin-top: 70px;
+      /* time higher on the screen */
+      margin-bottom: 8px;
+    }
+
+    #home-label {
+      font-size: 16px;
+      opacity: 0.9;
+      margin-bottom: 30px;
+    }
+
+    .home-sos-hint {
+      font-size: 12px;
+      opacity: 0.85;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    /* Hide home screen when app is active */
+    body.app-active #home-screen {
+      display: none;
+    }
+
+    /* ==== SCREEN 1: SERVICE SELECTION (inside phone) ==== */
+    #service-screen {
+      position: absolute;
+      inset: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      /* UPDATED: slightly tinted blue background */
+      background: radial-gradient(circle at top, #e0f2fe, #f9fafb);
+      color: #111827;
+      box-sizing: border-box;
+      z-index: 20;
+    }
+
+    #service-screen h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    #service-screen p {
+      font-size: 14px;
+      color: #4b5563;
+      margin-bottom: 24px;
+      max-width: 260px;
+    }
+
+    .service-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .service-btn {
+      background: #007aff;
+      color: white;
+      font-size: 18px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 18px;
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-width: 230px;
+      text-align: center;
+    }
+
+    .service-btn:hover {
+      background: #005ed3;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
+    }
+
+    /* ==== SCREEN 2: MAP (inside phone) ==== */
+    #map-screen {
+      position: absolute;
+      inset: 0;
+      display: none;
+      /* hidden initially */
+      background: #000;
+      z-index: 20;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #map-error {
+      position: absolute;
+      inset: 0;
+      display: none;
+      /* hidden by default; shown only on error */
+      padding: 16px;
+      text-align: center;
+      color: #b91c1c;
+      background: #020617;
+      font-size: 14px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Popup near the top */
+    #status-popup {
+      position: absolute;
+      top: 80px;
+      /* below notch + sos strip */
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 300px;
+      width: 82%;
+      background: rgba(15, 23, 42, 0.9);
+      color: #f9fafb;
+      border-radius: 18px;
+      padding: 14px 16px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(16px);
+      text-align: center;
+      z-index: 30;
+    }
+
+    #status-popup h2 {
+      margin: 0 0 4px 0;
+      font-size: 18px;
+    }
+
+    #status-popup .subtitle {
+      font-size: 12px;
+      color: #cbd5f5;
+      margin-bottom: 8px;
+    }
+
+    #statusText {
+      font-size: 13px;
+      white-space: pre-line;
+      margin: 6px 0 10px 0;
+      color: #e5e7eb;
+    }
+
+    .popup-buttons {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .small-btn {
+      background: #1f2937;
+      color: #e5e7eb;
+      border: none;
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .small-btn:hover {
+      background: #374151;
+    }
+
+    /* Call button on map screen (bottom-left) */
+    .call-btn {
+      position: absolute;
+      left: 18px;
+      bottom: 24px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: none;
+      background: #111827;
+      color: #f9fafb;
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.6);
+      cursor: pointer;
+      z-index: 35;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    .call-btn:hover {
+      transform: translateY(-1px);
+      background: #0f172a;
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.7);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="scene">
+    <div class="phone-shell">
+      <!-- Side power button for intro animation -->
+      <div class="side-button"></div>
+
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="notch"></div>
+          <div class="sos-strip">SOS • EMERGENCY ACCESS</div>
+
+          <!-- ========== HOME / LOCK SCREEN ========== -->
+          <div id="home-screen">
+            <div id="home-time">9:41</div>
+            <div id="home-label">Emergency SOS Quick Access</div>
+            <div class="home-sos-hint">
+              Triple-press side button to open
+            </div>
+          </div>
+
+          <!-- ========== SCREEN 1: PICK SERVICE ========== -->
+          <div id="service-screen">
+            <h1>Request Help</h1>
+            <p>
+              Choose the emergency service you need. We’ll use your live location
+              by default, and you can change it on the map if needed.
+            </p>
+
+            <div class="service-buttons">
+              <button class="service-btn" onclick="chooseService('ambulance')">
+                🚑 Ambulance
+              </button>
+              <button class="service-btn" onclick="chooseService('police')">
+                🚓 Police
+              </button>
+              <button class="service-btn" onclick="chooseService('fire')">
+                🔥 Firetruck
+              </button>
+            </div>
+          </div>
+
+          <!-- ========== SCREEN 2: MAP + POPUP ========== -->
+          <div id="map-screen">
+            <div id="map"></div>
+            <div id="map-error">
+              Map failed to load. Check your internet connection and API key.
+            </div>
+
+            <div id="status-popup">
+              <h2 id="serviceTitle">Selected Service</h2>
+              <div class="subtitle">
+                Using your live location by default. You can tap “Change location”
+                to pick a different point on the map.
+              </div>
+              <div id="statusText">Preparing request...</div>
+
+              <div class="popup-buttons">
+                <button class="small-btn" onclick="requestHelpAgain()">
+                  Use current location
+                </button>
+                <button class="small-btn" onclick="enableLocationEdit()">
+                  📍 Change location
+                </button>
+                <button class="small-btn" onclick="goBackToServiceSelect()">
+                  ◀ Change service
+                </button>
+              </div>
+            </div>
+
+            <!-- New call button -->
+            <button class="call-btn" onclick="callService()" title="Call emergency">
+              📞
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const BACKEND_BASE = "http://localhost:5000";
+
+    let map;
+    let directionsService;
+    let routePolyline = null;
+    let ambulanceMarker = null;
+    let incidentMarker = null;
+    let routePath = [];
+    let animationTimer = null;
+    let animationIndex = 0;
+
+    let userLat = null;
+    let userLon = null;
+    let assignedUnitId = null;
+    let currentServiceType = null;
+
+    let locationEditMode = false; // when true, next map click sets new incident location
+
+    // ===== INTRO ANIMATION SEQUENCE =====
+    window.addEventListener("load", () => {
+      // App UI should be hidden/disabled until intro finishes
+      document.body.classList.add("pre-intro");
+
+      // Step 1: keep home screen visible ~1s, then rotate to side
+      setTimeout(() => {
+        document.body.classList.add("intro-side");
+      }, 1000); // 1 second front-on
+
+      // Step 2: when side, play triple-click animation
+      setTimeout(() => {
+        document.body.classList.add("intro-button");
+      }, 1900);
+
+      // Step 3: rotate back to front
+      setTimeout(() => {
+        document.body.classList.remove("intro-side");
+        document.body.classList.add("intro-front");
+      }, 3400);
+
+      // Step 4: activate app UI (home screen disappears, SOS strip appears)
+      setTimeout(() => {
+        document.body.classList.remove("pre-intro");
+        document.body.classList.add("app-active");
+        document.body.classList.remove("intro-button");
+      }, 3800);
+    });
+
+    // ===== SCREEN FLOW =====
+    function chooseService(type) {
+      currentServiceType = type;
+
+      const serviceTitle = document.getElementById("serviceTitle");
+      if (type === "ambulance") {
+        serviceTitle.textContent = "Ambulance Service";
+      } else if (type === "police") {
+        serviceTitle.textContent = "Police Service";
+      } else {
+        serviceTitle.textContent = "Fire Service";
+      }
+
+      document.getElementById("service-screen").style.display = "none";
+      document.getElementById("map-screen").style.display = "block";
+
+      if (typeof google !== "undefined" && map) {
+        // Immediately dispatch using current location by default
+        requestHelp(currentServiceType);
+      } else {
+        document.getElementById("statusText").innerText =
+          "Loading map... please wait a second, then tap 'Use current location'.";
+      }
+    }
+
+    function goBackToServiceSelect() {
+      clearGraphics();
+      currentServiceType = null;
+      assignedUnitId = null;
+      locationEditMode = false;
+      document.getElementById("map-screen").style.display = "none";
+      document.getElementById("service-screen").style.display = "flex";
+      document.getElementById("statusText").innerText = "Preparing request...";
+    }
+
+    function requestHelpAgain() {
+      if (!currentServiceType) return;
+      requestHelp(currentServiceType);
+    }
+
+    function enableLocationEdit() {
+      if (!currentServiceType) return;
+      locationEditMode = true;
+      document.getElementById("statusText").innerText =
+        "Tap anywhere on the map to set a new location.";
+    }
+
+    // Call button handler
+    function callService() {
+      // For demo: open dialer with a placeholder emergency number.
+      // Replace 911 with appropriate local number if needed.
+      window.location.href = "tel:911";
+    }
+
+    // ===== GOOGLE MAPS INIT =====
+    function initMap() {
+      try {
+        map = new google.maps.Map(document.getElementById("map"), {
+          center: { lat: 43.65, lng: -79.38 },
+          zoom: 13,
+          disableDefaultUI: true,
+        });
+
+        directionsService = new google.maps.DirectionsService();
+
+        // Handle map clicks when in location edit mode
+        map.addListener("click", (e) => {
+          if (!locationEditMode || !currentServiceType) return;
+
+          userLat = e.latLng.lat();
+          userLon = e.latLng.lng();
+
+          document.getElementById("statusText").innerText =
+            "Recalculating route to new location...";
+
+          // Clear old markers/line and set new incident marker
+          clearGraphics();
+
+          const incidentLatLng = { lat: userLat, lng: userLon };
+          map.setCenter(incidentLatLng);
+          map.setZoom(14);
+
+          incidentMarker = new google.maps.Marker({
+            position: incidentLatLng,
+            map: map,
+            label: "❗",
+          });
+
+          // Dispatch using this custom location
+          dispatchWithBackend(currentServiceType);
+
+          locationEditMode = false;
+        });
+      } catch (e) {
+        console.error("Map init error:", e);
+        document.getElementById("map").style.display = "none";
+        const err = document.getElementById("map-error");
+        err.style.display = "flex";
+      }
+    }
+
+    function clearGraphics() {
+      if (routePolyline) {
+        routePolyline.setMap(null);
+        routePolyline = null;
+      }
+      if (ambulanceMarker) {
+        ambulanceMarker.setMap(null);
+        ambulanceMarker = null;
+      }
+      if (incidentMarker) {
+        incidentMarker.setMap(null);
+        incidentMarker = null;
+      }
+      if (animationTimer) {
+        clearInterval(animationTimer);
+        animationTimer = null;
+      }
+      routePath = [];
+      animationIndex = 0;
+    }
+
+    function formatDistance(m) {
+      if (m < 1000) return `${Math.round(m)} m`;
+      return `${(m / 1000).toFixed(2)} km`;
+    }
+
+    // ===== ANIMATION: show remaining route only =====
+    function startRouteAnimation() {
+      if (!routePath.length || !ambulanceMarker) return;
+
+      const speedMps = 5;    // ~18 km/h (slower for visual realism)
+      const stepTimeMs = 200; // 0.2s per step
+
+      animationIndex = 0;
+
+      if (!routePolyline) {
+        routePolyline = new google.maps.Polyline({
+          path: routePath,
+          map: map,
+          strokeColor: "#FF0000",
+          strokeWeight: 5,
+        });
+      } else {
+        routePolyline.setPath(routePath);
+      }
+
+      animationTimer = setInterval(() => {
+        if (animationIndex >= routePath.length) {
+          clearInterval(animationTimer);
+          animationTimer = null;
+          document.getElementById("statusText").innerText =
+            `Unit ${assignedUnitId} has arrived at your location.`;
+          return;
+        }
+
+        const pos = routePath[animationIndex];
+        ambulanceMarker.setPosition(pos);
+
+        const remainingPath = routePath.slice(animationIndex);
+        routePolyline.setPath(remainingPath);
+
+        const remainingMeters =
+          google.maps.geometry.spherical.computeLength(remainingPath);
+        const etaSec = remainingMeters / speedMps;
+        const etaMin = etaSec / 60;
+
+        let statusText = `Unit ${assignedUnitId} is on the way\n`;
+        statusText += `Distance: ${formatDistance(remainingMeters)}\n`;
+        statusText += `ETA: ${etaMin.toFixed(1)} min`;
+        document.getElementById("statusText").innerText = statusText;
+
+        animationIndex++;
+      }, stepTimeMs);
+    }
+
+    // ===== Helper: call backend using current userLat/userLon =====
+    function dispatchWithBackend(type) {
+      if (userLat == null || userLon == null) {
+        document.getElementById("statusText").innerText =
+          "No location set. Use current location or tap 'Change location'.";
+        return;
+      }
+
+      const incidentLatLng = { lat: userLat, lng: userLon };
+
+      fetch(`${BACKEND_BASE}/api/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, location: [userLat, userLon] }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.error) {
+            alert(data.error);
+            document.getElementById("statusText").innerText =
+              "Error: " + data.error;
+            return;
+          }
+
+          assignedUnitId = data.unit;
+
+          const origin = {
+            lat: data.from.lat,
+            lng: data.from.lon,
+          };
+          const destination = incidentLatLng;
+
+          const capType = type.charAt(0).toUpperCase() + type.slice(1);
+
+          directionsService.route(
+            {
+              origin,
+              destination,
+              travelMode: google.maps.TravelMode.DRIVING,
+            },
+            (result, status) => {
+              if (status !== "OK" || !result.routes.length) {
+                console.error("Directions request failed:", status);
+                document.getElementById("statusText").innerText =
+                  `${capType} Unit ${assignedUnitId} dispatched\n(Unable to load driving route)`;
+                return;
+              }
+
+              const route = result.routes[0];
+              const leg = route.legs[0];
+              routePath = route.overview_path;
+
+              ambulanceMarker = new google.maps.Marker({
+                position: origin,
+                map: map,
+                label:
+                  type === "ambulance"
+                    ? "🚑"
+                    : type === "police"
+                      ? "🚓"
+                      : "🔥",
+              });
+
+              document.getElementById(
+                "statusText"
+              ).innerText = `${capType} Unit ${assignedUnitId
+              } dispatched\nRoad distance: ${leg.distance.text
+                }\nETA: ${leg.duration.text}`;
+
+              const bounds = new google.maps.LatLngBounds();
+              bounds.extend(origin);
+              bounds.extend(destination);
+              map.fitBounds(bounds);
+
+              startRouteAnimation();
+            }
+          );
+        })
+        .catch((err) => {
+          console.error(err);
+          document.getElementById("statusText").innerText =
+            "Error contacting server.";
+        });
+    }
+
+    // ===== MAIN: request help using CURRENT GPS location =====
+    function requestHelp(type) {
+      if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser.");
+        return;
+      }
+
+      if (!map || !directionsService) {
+        document.getElementById("statusText").innerText =
+          "Map is still loading. Please wait a second and try again.";
+        return;
+      }
+
+      document.getElementById("statusText").innerText =
+        "Getting your current location...";
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          userLat = position.coords.latitude;
+          userLon = position.coords.longitude;
+
+          clearGraphics();
+
+          const incidentLatLng = { lat: userLat, lng: userLon };
+          map.setCenter(incidentLatLng);
+          map.setZoom(14);
+
+          incidentMarker = new google.maps.Marker({
+            position: incidentLatLng,
+            map: map,
+            label: "❗",
+          });
+
+          dispatchWithBackend(type);
+        },
+        () => {
+          alert("Unable to retrieve your location.");
+          document.getElementById("statusText").innerText =
+            "Location permission denied.";
+        }
+      );
+    }
+  </script>
+
+  <!-- Google Maps JS (put YOUR API KEY here) -->
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_API_KEY }}&callback=initMap" async defer></script>
+</body>
+
+</html>
